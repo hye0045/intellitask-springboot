@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Đăng ký tài khoản</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card mt-5">
+                    <div class="card-body">
+                        <h3 class="card-title text-center mb-4">Tạo tài khoản mới</h3>
+                        
+                        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+                        
+                        <form th:action="@{/register}" th:object="${user}" method="post">
+                            <div class="mb-3">
+                                <label for="fullName" class="form-label">Họ và tên:</label>
+                                <input type="text" id="fullName" th:field="*{fullName}" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Tên đăng nhập:</label>
+                                <input type="text" id="username" th:field="*{username}" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Mật khẩu:</label>
+                                <input type="password" id="password" th:field="*{password}" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="skills" class="form-label">Kỹ năng:</label>
+                                <input type="text" id="skills" th:field="*{skills}" class="form-control" placeholder="Ví dụ: Java, Design, SEO">
+                                <div class="form-text">Phân cách các kỹ năng bằng dấu phẩy.</div>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Đăng ký</button>
+                            </div>
+                        </form>
+                         <div class="text-center mt-3">
+                            <small>Đã có tài khoản? <a th:href="@{/login}">Đăng nhập ngay</a></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

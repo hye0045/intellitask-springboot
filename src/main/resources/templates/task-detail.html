@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="${task.title}">Chi tiết Công việc</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a th:href="@{/}">Dự án</a></li>
+                <li class="breadcrumb-item"><a th:href="@{/projects/{id}(id=${task.project.id})}" th:text="${task.project.name}"></a></li>
+                <li class="breadcrumb-item active" aria-current="page">Công việc</li>
+            </ol>
+        </nav>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 th:text="${task.title}">Tiêu đề công việc</h3>
+            </div>
+            <div class="card-body">
+                <form action="#" th:action="@{/projects/{projectId}/tasks/{taskId}/update(projectId=${task.project.id}, taskId=${task.id})}" th:object="${task}" method="post">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Tiêu đề:</label>
+                                <input type="text" id="title" th:field="*{title}" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Mô tả:</label>
+                                <button type="button" id="generate-desc-btn" class="btn btn-sm btn-outline-info float-end">✨ Gợi ý</button>
+                                <textarea id="description" th:field="*{description}" rows="8" class="form-control"></textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="assignee" class="form-label">Giao cho:</label>
+                                <select id="assignee" th:field="*{assignee.id}" class="form-select">
+                                    <option value="">-- Chưa giao --</option>
+                                    <option th:each="user : ${users}" th:value="${user.id}" th:text="${user.fullName}"></option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="status" class="form-label">Trạng thái:</label>
+                                <select id="status" th:field="*{status}" class="form-select">
+                                    <option th:each="st : ${T(com.minhhue.IntelliTask.entity.Task.TaskStatus).values()}" 
+                                            th:value="${st}" th:text="${st}"></option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dueDate" class="form-label">Deadline:</label>
+                                <input type="date" id="dueDate" th:field="*{dueDate}" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Cập nhật Công việc</button>
+                </form>
+                
+                <hr>
+
+                <!-- Đính kèm tệp -->
+                <div class="mt-4">
+                    <h5>Tệp đính kèm</h5>
+                    <ul id="attachment-list" class="list-group mb-3">
+                        <li th:each="att : ${task.attachments}" class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                <a th:href="${att.fileUrl}" th:text="${att.fileName}" target="_blank" rel="noopener noreferrer"></a>
+                                <small class="text-muted" th:text="${att.uploadedAt}"></small>
+                            </span>
+                        </li>
+                        <li th:if="${task.attachments.isEmpty()}" class="list-group-item text-muted">Chưa có tệp đính kèm.</li>
+                    </ul>
+
+                    <form id="attachment-form" class="row g-2">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="attachment-name" placeholder="Tên tệp (ví dụ: Báo cáo.pdf)" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="url" class="form-control" id="attachment-url" placeholder="Link tệp (Drive, OneDrive...)" required>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button type="submit" class="btn btn-outline-secondary">Thêm tệp</button>
+                        </div>
+                    </form>
+                </div>
+
+                <hr>
+
+                <!-- Form xóa nằm ở góc dưới -->
+                <form th:action="@{/projects/{projectId}/tasks/{taskId}/delete(projectId=${task.project.id}, taskId=${task.id})}" method="post" onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này không?');">
+                    <button type="submit" class="btn btn-outline-danger">Xóa Công việc</button>
+                </form>
+            </div>
+        </div>
+    <!-- ======================= PHẦN CHATBOT (FLOATING BUBBLE) ======================= -->
+        <button id="chatbot-fab" class="chatbot-fab" title="Trợ lý AI">
+            <span>🤖</span>
+        </button>
+        <div class="chatbot-container" id="chatbot-panel" style="display: none;">
+            <div class="chatbot-header">
+                <span>Trợ lý AI IntelliTask</span>
+                <span id="chatbot-toggle" class="chatbot-close">×</span>
+            </div>
+            <div class="chatbot-body">
+                <div id="chatbot-messages" class="chatbot-messages">
+                    <!-- Tin nhắn sẽ được thêm vào đây bằng JavaScript -->
+                    <div class="message bot-message">Xin chào! Tôi có thể giúp gì cho bạn về công việc này? (Hãy thử hỏi: "tóm tắt")</div>
+                </div>
+                <div class="chatbot-input-area">
+                    <input type="text" id="chatbot-input" placeholder="Hỏi điều gì đó...">
+                    <button id="chatbot-send-btn">Gửi</button>
+                </div>
+            </div>
+        </div>
+    <style>
+        /* Floating chatbot styles */
+        .chatbot-fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: #0d6efd;
+            color: #fff;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            cursor: pointer;
+            z-index: 1050;
+        }
+        .chatbot-container {
+            position: fixed;
+            bottom: 90px;
+            right: 24px;
+            width: 320px;
+            max-height: 70vh;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1050;
+        }
+        .chatbot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: #0d6efd;
+            color: #fff;
+            font-weight: 600;
+        }
+        .chatbot-close { cursor: pointer; }
+        .chatbot-body {
+            display: flex;
+            flex-direction: column;
+            height: 360px;
+            background: #f8f9fa;
+        }
+        .chatbot-messages {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+        }
+        .chatbot-input-area {
+            display: flex;
+            gap: 8px;
+            padding: 10px 12px;
+            background: #fff;
+            border-top: 1px solid #e9ecef;
+        }
+        .chatbot-input-area input {
+            flex: 1;
+        }
+        .message {
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            max-width: 90%;
+        }
+        .user-message {
+            background: #0d6efd;
+            color: #fff;
+            margin-left: auto;
+        }
+        .bot-message {
+            background: #e9ecef;
+            color: #212529;
+            margin-right: auto;
+        }
+    </style>
+    <script th:inline="javascript">
+        // Thêm vào trong thẻ <script> của task-detail.html
+        const generateDescBtn = document.getElementById('generate-desc-btn');
+        const titleInput = document.getElementById('title');
+        const descriptionTextarea = document.getElementById('description');
+
+        generateDescBtn.addEventListener('click', async () => {
+            const title = titleInput.value;
+            if (!title) {
+                alert('Vui lòng nhập tiêu đề trước.');
+                return;
+            }
+            
+            generateDescBtn.textContent = 'Đang nghĩ...';
+            // Gọi API mới tạo
+            const response = await fetch('/api/ai/generate-description', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ title: title })
+            });
+            const data = await response.json();
+            
+            // Điền kết quả vào ô mô tả
+            descriptionTextarea.value = data.description;
+            generateDescBtn.textContent = '✨ Gợi ý';
+        });
+        // === LOGIC CHO CHATBOT ===
+        const chatbotToggle = document.getElementById('chatbot-toggle');
+        const chatbotBody = document.querySelector('.chatbot-body');
+        const chatbotMessages = document.getElementById('chatbot-messages');
+        const chatbotInput = document.getElementById('chatbot-input');
+        const chatbotSendBtn = document.getElementById('chatbot-send-btn');
+        const currentTaskId = /*[[${task.id}]]*/ 0; // Lấy taskId từ Thymeleaf
+        const attachmentForm = document.getElementById('attachment-form');
+        const attachmentNameInput = document.getElementById('attachment-name');
+        const attachmentUrlInput = document.getElementById('attachment-url');
+        const attachmentList = document.getElementById('attachment-list');
+        const chatbotFab = document.getElementById('chatbot-fab');
+        const chatbotPanel = document.getElementById('chatbot-panel');
+
+        // Ẩn/hiện chatbot (floating)
+        const openChat = () => {
+            chatbotPanel.style.display = 'flex';
+            chatbotFab.style.display = 'none';
+        };
+        const closeChat = () => {
+            chatbotPanel.style.display = 'none';
+            chatbotFab.style.display = 'inline-flex';
+        };
+
+        chatbotFab.addEventListener('click', openChat);
+        chatbotToggle.addEventListener('click', closeChat);
+
+        // Gửi tin nhắn
+        chatbotSendBtn.addEventListener('click', handleUserMessage);
+        chatbotInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUserMessage();
+            }
+        });
+
+        function handleUserMessage() {
+            const messageText = chatbotInput.value.trim();
+            if (!messageText) return;
+
+            // Hiển thị tin nhắn của người dùng
+            addMessage(messageText, 'user-message');
+            chatbotInput.value = '';
+
+            // Bot xử lý tin nhắn
+            processBotResponse(messageText);
+        }
+
+        function addMessage(text, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', className);
+            messageDiv.textContent = text;
+            chatbotMessages.appendChild(messageDiv);
+            // Tự động cuộn xuống tin nhắn cuối cùng
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        }
+
+        // === ĐÍNH KÈM TỆP: Gửi link và reload danh sách ===
+        if (attachmentForm) {
+            attachmentForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const payload = {
+                    fileName: attachmentNameInput.value.trim(),
+                    fileUrl: attachmentUrlInput.value.trim()
+                };
+                if (!payload.fileName || !payload.fileUrl) return;
+
+                try {
+                    const response = await fetch(`/api/tasks/${currentTaskId}/attachments`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error('Không thể thêm tệp');
+                    const newAttachment = await response.json();
+                    // Cập nhật UI nhanh
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.innerHTML = `<span><a href="${newAttachment.fileUrl}" target="_blank" rel="noopener noreferrer">${newAttachment.fileName}</a> <small class="text-muted">${newAttachment.uploadedAt || ''}</small></span>`;
+                    // Nếu trước đó có dòng "Chưa có tệp..." thì xóa
+                    const emptyItem = attachmentList.querySelector('.text-muted');
+                    if (emptyItem) emptyItem.remove();
+                    attachmentList.appendChild(li);
+                    attachmentNameInput.value = '';
+                    attachmentUrlInput.value = '';
+                } catch (err) {
+                    alert('Thêm tệp thất bại. Kiểm tra lại đường dẫn.');
+                }
+            });
+        }
+
+        async function processBotResponse(userMessage) {
+            // Phân tích từ khóa
+            if (userMessage.toLowerCase().includes('tóm tắt')) {
+                addMessage('Chắc chắn rồi. Tôi đang đọc lại các thảo luận...', 'bot-message');
+                
+                try {
+                    // Gọi API tóm tắt
+                    const response = await fetch('/api/ai/summarize-task-comments', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ taskId: currentTaskId })
+                    });
+                    const data = await response.json();
+                    addMessage(data.summary, 'bot-message');
+                } catch (error) {
+                    addMessage('Xin lỗi, tôi gặp lỗi khi tóm tắt.', 'bot-message');
+                    console.error(error);
+                }
+            } else {
+                // Các câu trả lời mặc định khác
+                addMessage('Xin lỗi, tôi chưa hiểu câu hỏi đó. Hiện tại tôi chỉ có thể "tóm tắt".', 'bot-message');
+            }
+        }
+        </script>
+</body>
+</html>

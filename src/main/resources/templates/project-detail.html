@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="${project.name}">Chi tiết Dự án</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Breadcrumb để điều hướng -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a th:href="@{/}">Dự án</a></li>
+                <li class="breadcrumb-item active" aria-current="page" th:text="${project.name}">Tên dự án</li>
+            </ol>
+        </nav>
+        
+        <!-- Thông tin dự án -->
+        <h1 th:text="${project.name}">Tên Dự án</h1>
+        <p class="lead" th:text="${project.description}">Mô tả dự án.</p>
+
+        <hr>
+
+        <!-- Bảng danh sách công việc -->
+        <div class="card">
+            <div class="card-header">
+                Công việc trong dự án
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Tiêu đề</th>
+                            <th>Người thực hiện</th>
+                            <th>Trạng thái</th>
+                            <th>Deadline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="task : ${tasks}">
+                            <td>
+                                <a th:href="@{/projects/{projectId}/tasks/{taskId}(projectId=${project.id}, taskId=${task.id})}" th:text="${task.title}"></a>
+                            </td>
+                            <td th:text="${task.assignee} ? ${task.assignee.fullName} : 'Chưa giao'"></td>
+                            <td><span class="badge bg-primary" th:text="${task.status}"></span></td>
+                            <td th:text="${task.dueDate}"></td>
+                        </tr>
+                        <tr th:if="${tasks.isEmpty()}">
+                            <td colspan="4" class="text-center">Chưa có công việc nào.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <hr>
+
+        <!-- Form AI -->
+        <div class="card mt-4">
+            <div class="card-header">
+                ✨ Tạo nhanh công việc với AI
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="ai-input" class="form-label">Dán nội dung giao việc vào đây:</label>
+                    <textarea id="ai-input" rows="5" class="form-control" placeholder="Ví dụ: Viết 3 bài post facebook..., deadline là thứ sáu..."></textarea>
+                </div>
+                <div>
+                    <button id="analyze-btn" class="btn btn-info" th:attr="data-project-id=${project.id}">
+                        Phân tích bằng AI
+                    </button>
+                    <span id="loading-spinner" style="display: none;" class="ms-2">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Đang xử lý...
+                    </span>
+                </div>
+
+                <div id="ai-results" class="mt-4" style="display: none;">
+                    <h5>Các công việc được đề xuất</h5>
+                    <table id="tasks-preview-table" class="table">
+                        <thead>
+                            <tr>
+                                <th>Tiêu đề</th>
+                                <th>Mô tả</th>
+                                <th>Deadline</th>
+                                <th>Giao cho</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <button id="save-tasks-btn" class="btn btn-success">Lưu các công việc này</button>
+                </div>
+            </div>
+        </div>
+    <!-- ======================= PHẦN JAVASCRIPT ======================= -->
+    <script>
+    // === CÁC BIẾN TOÀN CỤC ===
+        let allUsers = []; 
+        let suggestedTasks = [];
+
+        // === LẤY CÁC PHẦN TỬ HTML ===
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const saveTasksBtn = document.getElementById('save-tasks-btn');
+        const aiInput = document.getElementById('ai-input');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const aiResultsDiv = document.getElementById('ai-results');
+        const tasksPreviewTbody = document.querySelector('#tasks-preview-table tbody');
+        // SỬA LỖI 1: Chỉ khai báo projectId một lần
+        const projectId = analyzeBtn.getAttribute('data-project-id');
+
+
+        // === HÀM TỰ ĐỘNG CHẠY KHI TRANG TẢI XONG ===
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/users');
+                if (!response.ok) {
+                    throw new Error('Không thể tải danh sách người dùng. Mã lỗi: ' + response.status);
+                }
+                allUsers = await response.json();
+                console.log('Tải thành công danh sách người dùng:', allUsers);
+            } catch (error) {
+                console.error(error);
+                alert('Lỗi nghiêm trọng: Không thể tải danh sách người dùng. Chức năng phân công sẽ không hoạt động.');
+            }
+        });
+
+
+        // === SỰ KIỆN CLICK NÚT "PHÂN TÍCH" ===
+        analyzeBtn.addEventListener('click', async () => {
+            const text = aiInput.value.trim();
+            if (!text) {
+                alert('Vui lòng nhập nội dung giao việc.');
+                return;
+            }
+            loadingSpinner.style.display = 'inline';
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/ai/extract-tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, projectId: parseInt(projectId) }),
+                });
+                if (!response.ok) { throw new Error('Lỗi từ server AI: ' + response.statusText); }
+                
+                const tasks = await response.json();
+                // Lưu ý: Chúng ta không gán cho suggestedTasks ở đây nữa, 
+                // mà sẽ thu thập dữ liệu mới nhất từ form khi nhấn nút "Lưu".
+                
+                displaySuggestedTasks(tasks);
+
+            } catch (error) {
+                console.error('Lỗi khi gọi API AI:', error);
+                alert('Đã có lỗi xảy ra. Vui lòng xem console để biết chi tiết.');
+            } finally {
+                loadingSpinner.style.display = 'none';
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        
+        // === HÀM VẼ BẢNG XEM TRƯỚC (ĐÃ SỬA LỖI 2) ===
+        function displaySuggestedTasks(tasks) {
+            tasksPreviewTbody.innerHTML = '';
+            if (tasks.length > 0) {
+                tasks.forEach(task => {
+                    const row = document.createElement('tr');
+                    
+                    // Tạo HTML cho ô dropdown người thực hiện
+                    let userOptions = '<option value="">-- Chọn --</option>';
+                    // Dùng biến `allUsers` đã được tải từ trước để lặp và tạo các <option>
+                    allUsers.forEach(user => {
+                        const isSuggested = user.id === task.suggestedAssigneeId;
+                        userOptions += `<option value="${user.id}" ${isSuggested ? 'selected' : ''}>${user.fullName}</option>`;
+                    });
+
+                    // Chèn các ô input và ô select đã có dữ liệu vào hàng
+                    row.innerHTML = `
+                        <td><input type="text" class="form-control title-input" value="${task.title || ''}"></td>
+                        <td><input type="text" class="form-control description-input" value="${task.description || ''}"></td>
+                        <td><input type="date" class="form-control due-date-input" value="${task.dueDate || ''}"></td>
+                        <td><select class="form-select assignee-select">${userOptions}</select></td>
+                    `;
+                    tasksPreviewTbody.appendChild(row);
+                });
+                aiResultsDiv.style.display = 'block';
+            } else {
+                alert('AI không tìm thấy công việc nào từ nội dung bạn cung cấp.');
+                aiResultsDiv.style.display = 'none';
+            }
+        }
+
+
+        // === SỰ KIỆN CLICK NÚT "LƯU" (ĐÃ TỐI ƯU HÓA) ===
+        saveTasksBtn.addEventListener('click', async () => {
+            // Thu thập dữ liệu MỚI NHẤT từ các ô input/select trên bảng xem trước
+            const tasksToSave = [];
+            const previewRows = tasksPreviewTbody.querySelectorAll('tr');
+
+            previewRows.forEach(row => {
+                const assigneeIdValue = row.querySelector('.assignee-select').value;
+                const taskData = {
+                    title: row.querySelector('.title-input').value,
+                    description: row.querySelector('.description-input').value,
+                    dueDate: row.querySelector('.due-date-input').value,
+                    // Lấy ID của người được chọn trong dropdown. Chuyển thành null nếu rỗng.
+                    suggestedAssigneeId: assigneeIdValue ? parseInt(assigneeIdValue) : null 
+                };
+                tasksToSave.push(taskData);
+            });
+
+            if (tasksToSave.length === 0) {
+                alert('Không có công việc nào để lưu.');
+                return;
+            }
+
+            saveTasksBtn.disabled = true;
+            saveTasksBtn.textContent = 'Đang lưu...';
+
+            try {
+                const response = await fetch(`/api/projects/${projectId}/tasks/batch-create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(tasksToSave), 
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error('Lỗi khi lưu công việc: ' + (errorData.message || response.statusText));
+                }
+
+                alert('Đã lưu các công việc thành công!');
+                window.location.reload();
+
+            } catch (error) {
+                console.error('Lỗi khi lưu tasks:', error);
+                alert('Đã có lỗi xảy ra khi lưu. Vui lòng xem console.');
+            } finally {
+                saveTasksBtn.disabled = false;
+                saveTasksBtn.textContent = 'Lưu các công việc này';
+            }
+        });
+
+    </script>
+</body>
+</html>

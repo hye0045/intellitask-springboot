@@ -1,0 +1,17 @@
+<!-- Sử dụng các class navbar của Bootstrap để tạo thanh điều hướng chuyên nghiệp -->
+<header th:fragment="navbar" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" th:href="@{/}">IntelliTask</a>
+            <div class="d-flex" sec:authorize="isAuthenticated()">
+                <span class="navbar-text me-3">
+                    Chào, <strong sec:authentication="name">Tên User</strong>!
+                </span>
+                <form th:action="@{/logout}" method="post">
+                    <!-- class="btn btn-outline-light": Biến nút bấm thành nút của Bootstrap -->
+                    <button type="submit" class="btn btn-outline-light btn-sm">Đăng xuất</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+</header>
